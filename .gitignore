@@ -6,4 +6,8 @@ CMakeCache.txt
 curl_websocket
 curl-websocket
 cmake_install.cmake
+.idea/
+cmake-build-debug/
+cmake-build-release/
+
 
