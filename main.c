@@ -240,6 +240,7 @@ int main(int argc, char *argv[]) {
     /* here you should do any extra sets, like cookies, auth... */
     curl_easy_setopt(myapp_ctx.easy, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(myapp_ctx.easy, CURLOPT_VERBOSE, 1L);
+    curl_easy_setopt(myapp_ctx.easy, CURLOPT_SSL_VERIFYPEER, 0L);
 
     /*
      * This is a traditional curl_multi app, see:

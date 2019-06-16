@@ -15,11 +15,18 @@
  * License along with this library;
  * if not, see <http://www.gnu.org/licenses/>.
  */
+#include <ctype.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
 #include <openssl/evp.h>
+
+#include "curl-websocket.h"
 
 static inline void _cws_debug(const char *prefix, const void *buffer, size_t len)
 {
-    const uint8_t *bytes = buffer;
+    const uint8_t *bytes = (const uint8_t *) buffer;
     size_t i;
     if (prefix)
         fprintf(stderr, "%s:", prefix);
@@ -36,20 +43,20 @@ static inline void _cws_debug(const char *prefix, const void *buffer, size_t len
 
 static void _cws_sha1(const void *input, const size_t input_len, void *output) {
     static const EVP_MD *md = NULL;
-    EVP_MD_CTX ctx;
+    EVP_MD_CTX *ctx;
 
     if (!md) {
         OpenSSL_add_all_digests();
         md = EVP_get_digestbyname("sha1");
     }
 
-    EVP_MD_CTX_init(&ctx);
-    EVP_DigestInit_ex(&ctx, md, NULL);
+    ctx = EVP_MD_CTX_new(); // EVP_MD_CTX_init(&ctx);
+    EVP_DigestInit_ex(ctx, md, NULL);
 
-    EVP_DigestUpdate(&ctx, input, input_len);
-    EVP_DigestFinal_ex(&ctx, output, NULL);
+    EVP_DigestUpdate(ctx, input, input_len);
+    EVP_DigestFinal_ex(ctx, output, NULL);
 
-    EVP_MD_CTX_cleanup(&ctx);
+    EVP_MD_CTX_free(ctx); // EVP_MD_CTX_cleanup(ctx);
 }
 
 static void _cws_encode_base64(const uint8_t *input, const size_t input_len, char *output)
