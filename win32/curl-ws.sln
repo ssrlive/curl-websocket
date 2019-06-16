@@ -1,0 +1,60 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "curl-ws", "curl-ws\curl-ws.vcxproj", "{E683C8F1-3C3F-4B5D-B60E-87D792D21002}"
+	ProjectSection(ProjectDependencies) = postProject
+		{46CF2D25-6A36-4189-B59C-E4815388E554} = {46CF2D25-6A36-4189-B59C-E4815388E554}
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B} = {11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "autobahn-testee", "autobahn-testee\autobahn-testee.vcxproj", "{12015B40-B865-4117-A21C-73991452EEC2}"
+	ProjectSection(ProjectDependencies) = postProject
+		{46CF2D25-6A36-4189-B59C-E4815388E554} = {46CF2D25-6A36-4189-B59C-E4815388E554}
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B} = {11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurl", "..\depends\curl\winbuild\libcurl.vcxproj", "{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbedTLS", "..\depends\mbedtls\visualc\VS2010\mbedTLS.vcxproj", "{46CF2D25-6A36-4189-B59C-E4815388E554}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E683C8F1-3C3F-4B5D-B60E-87D792D21002}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E683C8F1-3C3F-4B5D-B60E-87D792D21002}.Debug|Win32.Build.0 = Debug|Win32
+		{E683C8F1-3C3F-4B5D-B60E-87D792D21002}.Debug|x64.ActiveCfg = Debug|Win32
+		{E683C8F1-3C3F-4B5D-B60E-87D792D21002}.Release|Win32.ActiveCfg = Release|Win32
+		{E683C8F1-3C3F-4B5D-B60E-87D792D21002}.Release|Win32.Build.0 = Release|Win32
+		{E683C8F1-3C3F-4B5D-B60E-87D792D21002}.Release|x64.ActiveCfg = Release|Win32
+		{12015B40-B865-4117-A21C-73991452EEC2}.Debug|Win32.ActiveCfg = Debug|Win32
+		{12015B40-B865-4117-A21C-73991452EEC2}.Debug|Win32.Build.0 = Debug|Win32
+		{12015B40-B865-4117-A21C-73991452EEC2}.Debug|x64.ActiveCfg = Debug|Win32
+		{12015B40-B865-4117-A21C-73991452EEC2}.Release|Win32.ActiveCfg = Release|Win32
+		{12015B40-B865-4117-A21C-73991452EEC2}.Release|Win32.Build.0 = Release|Win32
+		{12015B40-B865-4117-A21C-73991452EEC2}.Release|x64.ActiveCfg = Release|Win32
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}.Debug|Win32.Build.0 = Debug|Win32
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}.Debug|x64.ActiveCfg = Debug|x64
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}.Debug|x64.Build.0 = Debug|x64
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}.Release|Win32.ActiveCfg = Release|Win32
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}.Release|Win32.Build.0 = Release|Win32
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}.Release|x64.ActiveCfg = Release|x64
+		{11B6838B-9E19-45EB-A4EE-F1A9FEFB3C4B}.Release|x64.Build.0 = Release|x64
+		{46CF2D25-6A36-4189-B59C-E4815388E554}.Debug|Win32.ActiveCfg = Debug|Win32
+		{46CF2D25-6A36-4189-B59C-E4815388E554}.Debug|Win32.Build.0 = Debug|Win32
+		{46CF2D25-6A36-4189-B59C-E4815388E554}.Debug|x64.ActiveCfg = Debug|x64
+		{46CF2D25-6A36-4189-B59C-E4815388E554}.Debug|x64.Build.0 = Debug|x64
+		{46CF2D25-6A36-4189-B59C-E4815388E554}.Release|Win32.ActiveCfg = Release|Win32
+		{46CF2D25-6A36-4189-B59C-E4815388E554}.Release|Win32.Build.0 = Release|Win32
+		{46CF2D25-6A36-4189-B59C-E4815388E554}.Release|x64.ActiveCfg = Release|x64
+		{46CF2D25-6A36-4189-B59C-E4815388E554}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

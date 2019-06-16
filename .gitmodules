@@ -1,0 +1,8 @@
+[submodule "depends/mbedtls"]
+	path = depends/mbedtls
+	url = https://github.com/ShadowsocksR-Live/mbedtls.git
+	branch = master
+[submodule "depends/curl"]
+	path = depends/curl
+	url = https://github.com/ShadowsocksR-Live/curl.git
+	branch = master
