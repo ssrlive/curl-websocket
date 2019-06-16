@@ -24,6 +24,11 @@
 #include <string.h>
 #include <stdbool.h>
 
+#if defined(_MSC_VER)
+#define inline __inline
+#define strncasecmp _strnicmp 
+#endif // defined(_MSC_VER)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

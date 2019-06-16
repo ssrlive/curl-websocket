@@ -106,7 +106,7 @@ static void a_main_loop(struct myapp_ctx *ctx) {
 static bool send_dummy(CURL *easy, bool text, size_t lines)
 {
     size_t len = lines * 80;
-    char *buf = malloc(len);
+    char *buf = (char *) calloc(len + 1, sizeof(*buf));
     const size_t az_range = 'Z' - 'A';
     size_t i;
     bool ret;
@@ -198,18 +198,20 @@ int main(int argc, char *argv[]) {
     const char *url;
     const char *protocols;
     struct myapp_ctx myapp_ctx = {
-        .text_lines = 0,
-        .binary_lines = 0,
-        .exitval = EXIT_SUCCESS,
+        NULL,
+        NULL,
+        /* .text_lines = */ 0,
+        /* .binary_lines = */ 0,
+        /* .exitval = */ EXIT_SUCCESS,
     };
     struct cws_callbacks cbs = {
-        .on_connect = on_connect,
-        .on_text = on_text,
-        .on_binary = on_binary,
-        .on_ping = on_ping,
-        .on_pong = on_pong,
-        .on_close = on_close,
-        .data = &myapp_ctx,
+        /* .on_connect = */ on_connect,
+        /* .on_text = */ on_text,
+        /* .on_binary = */ on_binary,
+        /* .on_ping = */ on_ping,
+        /* .on_pong = */ on_pong,
+        /* .on_close = */ on_close,
+        /* .data = */ &myapp_ctx,
     };
 
     if (argc <= 1) {

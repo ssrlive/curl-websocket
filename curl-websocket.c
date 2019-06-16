@@ -23,10 +23,10 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <unistd.h>
+//#include <unistd.h>
 #include <fcntl.h>
 #include <ctype.h>
-#include <inttypes.h>
+//#include <inttypes.h>
 #include <errno.h>
 
 #include "curl-websocket-utils.c"
@@ -203,7 +203,7 @@ static bool _cws_write(struct cws_data *priv, const void *buffer, size_t len) {
  * Here a temporary buffer is used to reduce number of "write" calls
  * and pointer arithmetic to avoid counters.
  */
-static bool _cws_write_masked(struct cws_data *priv, const uint8_t mask[static 4], const void *buffer, size_t len) {
+static bool _cws_write_masked(struct cws_data *priv, const uint8_t mask[4], const void *buffer, size_t len) {
     const uint8_t *itr_begin = buffer;
     const uint8_t *itr = itr_begin;
     const uint8_t *itr_end = itr + len;
@@ -223,11 +223,12 @@ static bool _cws_write_masked(struct cws_data *priv, const uint8_t mask[static 4
 
 static bool _cws_send(struct cws_data *priv, enum cws_opcode opcode, const void *msg, size_t msglen) {
     struct cws_frame_header fh = {
-        .fin = 1, /* TODO review if should fragment over some boundary */
-        .opcode = opcode,
-        .mask = 1,
-        .payload_len = ((msglen > UINT16_MAX) ? 127 :
+        /* .opcode = */ opcode,
+        0,
+        /* .fin = */ 1, /* TODO review if should fragment over some boundary */
+        /* .payload_len = */ ((msglen > UINT16_MAX) ? 127 :
                         (msglen > 125) ? 126 : msglen),
+        /* .mask = */ 1,
     };
     uint8_t mask[4];
 
@@ -399,10 +400,11 @@ static void _cws_check_accept(struct cws_data *priv, const char *buffer, size_t 
 }
 
 static void _cws_check_protocol(struct cws_data *priv, const char *buffer, size_t len) {
+    char *tmp = (char *) calloc(len + 1, sizeof(*tmp));
     if (priv->websocket_protocols.received)
         free(priv->websocket_protocols.received);
-
-    priv->websocket_protocols.received = strndup(buffer, len);
+    strncpy(tmp, buffer, len);
+    priv->websocket_protocols.received = tmp; // strndup(buffer, len);
 }
 
 static void _cws_check_upgrade(struct cws_data *priv, const char *buffer, size_t len) {
@@ -811,7 +813,7 @@ static size_t _cws_send_data(char *buffer, size_t count, size_t nitems, void *da
     return todo;
 }
 
-static const char *_cws_fill_websocket_key(struct cws_data *priv, char key_header[static 44]) {
+static const char *_cws_fill_websocket_key(struct cws_data *priv, char key_header[44]) {
     uint8_t key[16];
     /* 24 bytes of base24 encoded key
      * + GUID 258EAFA5-E914-47DA-95CA-C5AB0DC85B11
