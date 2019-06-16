@@ -19,8 +19,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
+#if 0
 #include <openssl/evp.h>
+#else
+#include <mbedtls/sha1.h>
+#include <mbedtls/base64.h>
+#endif
 
 #include "curl-websocket.h"
 
@@ -42,6 +48,7 @@ static inline void _cws_debug(const char *prefix, const void *buffer, size_t len
 }
 
 static void _cws_sha1(const void *input, const size_t input_len, void *output) {
+#if 0
     static const EVP_MD *md = NULL;
     EVP_MD_CTX *ctx;
 
@@ -57,10 +64,26 @@ static void _cws_sha1(const void *input, const size_t input_len, void *output) {
     EVP_DigestFinal_ex(ctx, output, NULL);
 
     EVP_MD_CTX_free(ctx); // EVP_MD_CTX_cleanup(ctx);
+#else
+    mbedtls_sha1_context sha1_ctx = { 0 };
+#ifndef SHA_DIGEST_LENGTH
+#define SHA_DIGEST_LENGTH 20
+#endif
+    unsigned char sha1_hash[SHA_DIGEST_LENGTH] = { 0 };
+
+    mbedtls_sha1_init(&sha1_ctx);
+    mbedtls_sha1_starts(&sha1_ctx);
+    mbedtls_sha1_update(&sha1_ctx, (unsigned char *)input, input_len);
+    mbedtls_sha1_finish(&sha1_ctx, sha1_hash);
+    mbedtls_sha1_free(&sha1_ctx);
+
+    memcpy(output, sha1_hash, SHA_DIGEST_LENGTH);
+#endif
 }
 
-static void _cws_encode_base64(const uint8_t *input, const size_t input_len, char *output)
+static void _cws_encode_base64(const uint8_t *input, size_t input_len, char *output, size_t out_len)
 {
+#if 0
     static const char base64_map[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
     size_t i, o;
     uint8_t c;
@@ -103,13 +126,50 @@ static void _cws_encode_base64(const uint8_t *input, const size_t input_len, cha
 
         output[o++] = base64_map[64];
     }
+#else
+    size_t b64_str_len = 0;
+    char *b64_str;
+
+    mbedtls_base64_encode(NULL, 0, &b64_str_len, input, input_len);
+
+    b64_str = (char *) calloc(b64_str_len + 1, sizeof(*b64_str));
+
+    mbedtls_base64_encode((unsigned char *)b64_str, b64_str_len, &b64_str_len, input, input_len);
+
+    if (out_len >= b64_str_len) {
+        memcpy(output, b64_str, b64_str_len);
+    } else {
+        assert(0);
+    }
+    free(b64_str);
+#endif
+}
+
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/entropy.h>
+
+static void random_bytes_generator(const char *seed, uint8_t *output, size_t len) {
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_entropy_context entropy;
+
+    if (seed==NULL || strlen(seed)==0 || output==NULL || len==0) {
+        return;
+    }
+
+    mbedtls_entropy_init(&entropy);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (unsigned char *)seed, strlen(seed));
+    mbedtls_ctr_drbg_set_prediction_resistance(&ctr_drbg, MBEDTLS_CTR_DRBG_PR_OFF);
+    mbedtls_ctr_drbg_random(&ctr_drbg, output, len);
+    mbedtls_entropy_free(&entropy);
+    mbedtls_ctr_drbg_free(&ctr_drbg);
 }
 
 static void _cws_get_random(void *buffer, size_t len)
 {
+#if 0
     uint8_t *bytes = buffer;
     uint8_t *bytes_end = bytes + len;
-#if 0
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd >= 0) {
         do {
@@ -126,6 +186,12 @@ static void _cws_get_random(void *buffer, size_t len)
         for (; bytes < bytes_end; bytes++)
             *bytes = random() & 0xff;
     }
+#else
+    static int count = 0;
+    char seed[0x100] = { 0 };
+    sprintf(seed, "seed %d seed %d", count, count+1);
+    count++;
+    random_bytes_generator(seed, (uint8_t *)buffer, len);
 #endif
 }
 

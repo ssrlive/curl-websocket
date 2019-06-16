@@ -11,7 +11,7 @@ add_executable(curl-websocket
         curl-websocket.h
         main.c)
 
-target_link_libraries(curl-websocket curl crypto)
+target_link_libraries(curl-websocket curl mbedtls mbedx509 mbedcrypto)
 
 
 add_executable(autobahn-testee
@@ -20,4 +20,4 @@ add_executable(autobahn-testee
         curl-websocket.h
         autobahn-testee.c)
 
-target_link_libraries(autobahn-testee curl crypto)
+target_link_libraries(autobahn-testee curl mbedtls mbedx509 mbedcrypto)

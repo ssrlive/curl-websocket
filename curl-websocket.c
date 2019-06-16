@@ -821,11 +821,11 @@ static const char *_cws_fill_websocket_key(struct cws_data *priv, char key_heade
 
     _cws_get_random(key, sizeof(key));
 
-    _cws_encode_base64(key, sizeof(key), buf);
+    _cws_encode_base64(key, sizeof(key), buf, 24);
     memcpy(key_header + strlen("Sec-WebSocket-Key: "), buf, 24);
 
     _cws_sha1(buf, sizeof(buf), sha1hash);
-    _cws_encode_base64(sha1hash, sizeof(sha1hash), priv->accept_key);
+    _cws_encode_base64(sha1hash, sizeof(sha1hash), priv->accept_key, sizeof(priv->accept_key));
     priv->accept_key[sizeof(priv->accept_key) - 1] = '\0';
 
     return key_header;
