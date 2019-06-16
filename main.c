@@ -81,8 +81,13 @@ static void a_main_loop(struct myapp_ctx *ctx) {
         }
 
         if (maxfd == -1) {
+#if defined(_WIN32) || defined(WIN32)
+            Sleep(100);
+            rc = 0;
+#else
             struct timeval wait = { 1, 0 }; /* 1s */
             rc = select(0, NULL, NULL, NULL, &wait);
+#endif
         } else {
             rc = select(maxfd+1, &fdread, &fdwrite, &fdexcep, &timeout);
         }
