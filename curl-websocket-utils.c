@@ -109,6 +109,7 @@ static void _cws_get_random(void *buffer, size_t len)
 {
     uint8_t *bytes = buffer;
     uint8_t *bytes_end = bytes + len;
+#if 0
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd >= 0) {
         do {
@@ -125,6 +126,7 @@ static void _cws_get_random(void *buffer, size_t len)
         for (; bytes < bytes_end; bytes++)
             *bytes = random() & 0xff;
     }
+#endif
 }
 
 static inline void _cws_trim(const char **p_buffer, size_t *p_len)
