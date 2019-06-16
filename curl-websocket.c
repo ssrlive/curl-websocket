@@ -850,7 +850,7 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
     if (!easy)
         return NULL;
 
-    priv = calloc(1, sizeof(struct cws_data));
+    priv = (struct cws_data *) calloc(1, sizeof(struct cws_data));
     priv->easy = easy;
     curl_easy_setopt(easy, CURLOPT_PRIVATE, priv);
     curl_easy_setopt(easy, CURLOPT_HEADERFUNCTION, _cws_receive_header);
@@ -924,7 +924,7 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
     priv->headers = curl_slist_append(priv->headers, _cws_fill_websocket_key(priv, key_header));
 
     if (websocket_protocols) {
-        char *tmp = malloc(strlen("Sec-WebSocket-Protocol: ") +
+        char *tmp = (char *)malloc(strlen("Sec-WebSocket-Protocol: ") +
                            strlen(websocket_protocols) + 1);
         memcpy(tmp,
                "Sec-WebSocket-Protocol: ",

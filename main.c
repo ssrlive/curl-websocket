@@ -23,6 +23,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#if defined(WIN32) || defined(_WIN32)
+#include <WinSock2.h>
+#endif
 
 struct myapp_ctx {
     CURL *easy;
@@ -232,6 +235,13 @@ int main(int argc, char *argv[]) {
     }
     url = argv[1];
     protocols = argc > 2 ? argv[2] : NULL;
+
+    {
+#if defined(WIN32) || defined(_WIN32)
+        WSADATA wsaData;
+        WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
+    }
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 

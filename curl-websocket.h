@@ -27,6 +27,7 @@
 #if defined(_MSC_VER)
 #define inline __inline
 #define strncasecmp _strnicmp 
+#define snprintf _snprintf
 #endif // defined(_MSC_VER)
 
 #ifdef __cplusplus

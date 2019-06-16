@@ -330,16 +330,18 @@ int main(int argc, char *argv[]) {
     for (current_test = start_test; current_test <= end_test; current_test++) {
         char test_url[4096];
         struct myapp_ctx myapp_ctx = {
-            .exitval = EXIT_SUCCESS,
+            NULL,
+            NULL,
+            /* .exitval = */ EXIT_SUCCESS,
         };
         struct cws_callbacks cbs = {
-            .on_connect = on_connect,
-            .on_text = on_text,
-            .on_binary = on_binary,
-            .on_ping = on_ping,
-            .on_pong = on_pong,
-            .on_close = on_close,
-            .data = &myapp_ctx,
+            /* .on_connect = */ on_connect,
+            /* .on_text = */ on_text,
+            /* .on_binary = */ on_binary,
+            /* .on_ping = */ on_ping,
+            /* .on_pong = */ on_pong,
+            /* .on_close = */ on_close,
+            /* .data = */ &myapp_ctx,
         };
 
         fprintf(stderr, "TEST: %u\n", current_test);
