@@ -385,8 +385,8 @@ static void _cws_check_accept(struct cws_data *priv, const char *buffer, size_t 
     priv->accepted = false;
 
     if (len != sizeof(priv->accept_key) - 1) {
-        ERR("expected %zd bytes, got %zd '%.*s'",
-            sizeof(priv->accept_key) - 1, len, (int)len, buffer);
+        ERR("expected %d bytes, got %d '%.*s'",
+            (int)sizeof(priv->accept_key) - 1, (int)len, (int)len, buffer);
         return;
     }
 

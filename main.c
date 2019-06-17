@@ -23,9 +23,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#if defined(WIN32) || defined(_WIN32)
-#include <WinSock2.h>
-#endif
 
 struct myapp_ctx {
     CURL *easy;
@@ -132,7 +129,7 @@ static bool send_dummy(CURL *easy, bool text, size_t lines)
         char *ln = buf + i * 80;
         uint8_t chr;
 
-        snprintf(ln, 11, "%9zd ", i + 1);
+        snprintf(ln, 11, "%9d ", (int)i + 1);
         if (text)
             chr = (i % az_range) + 'A';
         else
@@ -147,13 +144,13 @@ static bool send_dummy(CURL *easy, bool text, size_t lines)
 }
 
 static void on_connect(void *data, CURL *easy, const char *websocket_protocols) {
-    struct myapp_ctx *ctx = data;
+    struct myapp_ctx *ctx = (struct myapp_ctx *) data;
     fprintf(stderr, "INFO: connected, websocket_protocols='%s'\n", websocket_protocols);
     send_dummy(easy, true, ++ctx->text_lines);
 }
 
 static void on_text(void *data, CURL *easy, const char *text, size_t len) {
-    struct myapp_ctx *ctx = data;
+    struct myapp_ctx *ctx = (struct myapp_ctx *) data;
     fprintf(stderr, "INFO: TEXT={\n%s\n}\n", text);
 
     if (ctx->text_lines < 5)
@@ -165,11 +162,11 @@ static void on_text(void *data, CURL *easy, const char *text, size_t len) {
 }
 
 static void on_binary(void *data, CURL *easy, const void *mem, size_t len) {
-    struct myapp_ctx *ctx = data;
-    const uint8_t *bytes = mem;
+    struct myapp_ctx *ctx = (struct myapp_ctx *) data;
+    const uint8_t *bytes = (const uint8_t *) mem;
     size_t i;
 
-    fprintf(stderr, "INFO: BINARY=%zd bytes {\n", len);
+    fprintf(stderr, "INFO: BINARY=%d bytes {\n", (int)len);
 
     for (i = 0; i < len; i++) {
         uint8_t b = bytes[i];
@@ -188,13 +185,13 @@ static void on_binary(void *data, CURL *easy, const void *mem, size_t len) {
 }
 
 static void on_ping(void *data, CURL *easy, const char *reason, size_t len) {
-    fprintf(stderr, "INFO: PING %zd bytes='%s'\n", len, reason);
+    fprintf(stderr, "INFO: PING %d bytes='%s'\n", (int)len, reason);
     cws_pong(easy, "just pong", SIZE_MAX);
     (void)data;
 }
 
 static void on_pong(void *data, CURL *easy, const char *reason, size_t len) {
-    fprintf(stderr, "INFO: PONG %zd bytes='%s'\n", len, reason);
+    fprintf(stderr, "INFO: PONG %d bytes='%s'\n", (int)len, reason);
 
     cws_close(easy, CWS_CLOSE_REASON_NORMAL, "close it!", SIZE_MAX);
     (void)data;
@@ -202,8 +199,8 @@ static void on_pong(void *data, CURL *easy, const char *reason, size_t len) {
 }
 
 static void on_close(void *data, CURL *easy, enum cws_close_reason reason, const char *reason_text, size_t reason_text_len) {
-    struct myapp_ctx *ctx = data;
-    fprintf(stderr, "INFO: CLOSE=%4d %zd bytes '%s'\n", reason, reason_text_len, reason_text);
+    struct myapp_ctx *ctx = (struct myapp_ctx *) data;
+    fprintf(stderr, "INFO: CLOSE=%4d %d bytes '%s'\n", reason, (int)reason_text_len, reason_text);
 
     ctx->exitval = (reason == CWS_CLOSE_REASON_NORMAL ?
                     EXIT_SUCCESS : EXIT_FAILURE);
@@ -249,13 +246,6 @@ int main(int argc, char *argv[]) {
     }
     url = argv[1];
     protocols = argc > 2 ? argv[2] : NULL;
-
-    {
-#if defined(WIN32) || defined(_WIN32)
-        WSADATA wsaData;
-        WSAStartup(MAKEWORD(2, 2), &wsaData);
-#endif
-    }
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
