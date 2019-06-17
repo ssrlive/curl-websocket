@@ -181,7 +181,7 @@ static bool _cws_write(struct cws_data *priv, const void *buffer, size_t len) {
      * extra space without realloc() (see _cws_send_data()).
      */
     //_cws_debug("WRITE", buffer, len);
-    uint8_t *tmp = realloc(priv->send.buffer, priv->send.len + len);
+    uint8_t *tmp = (uint8_t *) realloc(priv->send.buffer, priv->send.len + len);
     if (!tmp)
         return false;
     memcpy(tmp + priv->send.len, buffer, len);
@@ -369,7 +369,7 @@ bool cws_close(CURL *easy, enum cws_close_reason reason, const char *reason_text
         reason_text_len = strlen(reason_text);
 
     len = sizeof(uint16_t) + reason_text_len;
-    p = malloc(len);
+    p = (char *) malloc(len);
     memcpy(p, &r, sizeof(uint16_t));
     _cws_hton(p, sizeof(uint16_t));
     if (reason_text_len)
@@ -434,7 +434,7 @@ static void _cws_check_connection(struct cws_data *priv, const char *buffer, siz
 }
 
 static size_t _cws_receive_header(const char *buffer, size_t count, size_t nitems, void *data) {
-    struct cws_data *priv = data;
+    struct cws_data *priv = (struct cws_data *) data;
     size_t len = count * nitems;
     const struct header_checker {
         const char *prefix;
@@ -664,19 +664,19 @@ static size_t _cws_process_frame(struct cws_data *priv, const char *buffer, size
             struct cws_frame_header fh;
 
             memcpy(&fh, priv->recv.tmpbuf, sizeof(struct cws_frame_header));
-            priv->recv.current.opcode = fh.opcode;
+            priv->recv.current.opcode = (enum cws_opcode) fh.opcode;
             priv->recv.current.fin = fh.fin;
 
             if (fh._reserved || fh.mask)
                 cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, NULL, 0);
 
             if (fh.payload_len == 126) {
-                if (cws_opcode_is_control(fh.opcode))
+                if (cws_opcode_is_control((enum cws_opcode) fh.opcode))
                     cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, NULL, 0);
                 priv->recv.needed += sizeof(uint16_t);
                 continue;
             } else if (fh.payload_len == 127) {
-                if (cws_opcode_is_control(fh.opcode))
+                if (cws_opcode_is_control((enum cws_opcode) fh.opcode))
                     cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, NULL, 0);
                 priv->recv.needed += sizeof(uint64_t);
                 continue;
@@ -770,7 +770,7 @@ static size_t _cws_process_frame(struct cws_data *priv, const char *buffer, size
 }
 
 static size_t _cws_receive_data(const char *buffer, size_t count, size_t nitems, void *data) {
-    struct cws_data *priv = data;
+    struct cws_data *priv = (struct cws_data *) data;
     size_t len = count * nitems;
     while (len > 0) {
         size_t used = _cws_process_frame(priv, buffer, len);
@@ -782,7 +782,7 @@ static size_t _cws_receive_data(const char *buffer, size_t count, size_t nitems,
 }
 
 static size_t _cws_send_data(char *buffer, size_t count, size_t nitems, void *data) {
-    struct cws_data *priv = data;
+    struct cws_data *priv = (struct cws_data *) data;
     size_t len = count * nitems;
     size_t todo = priv->send.len;
 
@@ -818,7 +818,7 @@ static const char *_cws_fill_websocket_key(struct cws_data *priv, char key_heade
     /* 24 bytes of base24 encoded key
      * + GUID 258EAFA5-E914-47DA-95CA-C5AB0DC85B11
      */
-    char buf[60] = "01234567890123456789....258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    char buf[60 + 1] = "01234567890123456789....258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     uint8_t sha1hash[20];
 
     _cws_get_random(key, sizeof(key));
@@ -826,7 +826,7 @@ static const char *_cws_fill_websocket_key(struct cws_data *priv, char key_heade
     _cws_encode_base64(key, sizeof(key), buf, 24);
     memcpy(key_header + strlen("Sec-WebSocket-Key: "), buf, 24);
 
-    _cws_sha1(buf, sizeof(buf), sha1hash);
+    _cws_sha1(buf, 60, sha1hash);
     _cws_encode_base64(sha1hash, sizeof(sha1hash), priv->accept_key, sizeof(priv->accept_key));
     priv->accept_key[sizeof(priv->accept_key) - 1] = '\0';
 
@@ -868,14 +868,14 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
 
     /* curl doesn't support ws:// or wss:// scheme, rewrite to http/https */
     if (strncmp(url, "ws://", strlen("ws://")) == 0) {
-        tmp = malloc(strlen(url) - strlen("ws://") + strlen("http://") + 1);
+        tmp = (char *) malloc(strlen(url) - strlen("ws://") + strlen("http://") + 1);
         memcpy(tmp, "http://", strlen("http://"));
         memcpy(tmp + strlen("http://"),
                url + strlen("ws://"),
                strlen(url) - strlen("ws://") + 1);
         url = tmp;
     } else if (strncmp(url, "wss://", strlen("wss://")) == 0) {
-        tmp = malloc(strlen(url) - strlen("wss://") + strlen("https://") + 1);
+        tmp = (char *) malloc(strlen(url) - strlen("wss://") + strlen("https://") + 1);
         memcpy(tmp, "https://", strlen("https://"));
         memcpy(tmp + strlen("https://"),
                url + strlen("wss://"),
@@ -911,12 +911,12 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
      * CURLOPT_UPLOAD=1 without a size implies in:
      *     Transfer-Encoding: chunked
      * but we don't want that, rather unmodified (raw) bites as we're
-     * doing the websockets framing ourselves. Force nothing.
+     * doing the websocket framing ourselves. Force nothing.
      */
     priv->headers = curl_slist_append(priv->headers, "Transfer-Encoding:");
     /* END: work around CURL to get WebSocket. */
 
-    /* regular mandatory WebSockets headers */
+    /* regular mandatory WebSocket headers */
     priv->headers = curl_slist_append(priv->headers, "Connection: Upgrade");
     priv->headers = curl_slist_append(priv->headers, "Upgrade: websocket");
     priv->headers = curl_slist_append(priv->headers, "Sec-WebSocket-Version: 13");
