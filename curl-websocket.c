@@ -204,7 +204,7 @@ static bool _cws_write(struct cws_data *priv, const void *buffer, size_t len) {
  * and pointer arithmetic to avoid counters.
  */
 static bool _cws_write_masked(struct cws_data *priv, const uint8_t mask[4], const void *buffer, size_t len) {
-    const uint8_t *itr_begin = buffer;
+    const uint8_t *itr_begin = (const uint8_t *)buffer;
     const uint8_t *itr = itr_begin;
     const uint8_t *itr_end = itr + len;
     uint8_t tmpbuf[CWS_MASK_TMPBUF_SIZE];
@@ -521,10 +521,10 @@ static void _cws_dispatch(struct cws_data *priv) {
                 if (priv->recv.current.used == 0)
                     str = "";
                 if (priv->cbs.on_text)
-                    priv->cbs.on_text((void *)priv->cbs.data, priv->easy, str, priv->recv.current.used);
+                    priv->cbs.on_text((void *)priv->cbs.data, priv->easy, str, (size_t)priv->recv.current.used);
             } else if (priv->recv.fragmented.opcode == CWS_OPCODE_BINARY) {
                 if (priv->cbs.on_binary)
-                    priv->cbs.on_binary((void *)priv->cbs.data, priv->easy, priv->recv.current.payload, priv->recv.current.used);
+                    priv->cbs.on_binary((void *)priv->cbs.data, priv->easy, priv->recv.current.payload, (size_t)priv->recv.current.used);
             }
             memset(&priv->recv.fragmented, 0, sizeof(priv->recv.fragmented));
         } else {
@@ -543,7 +543,7 @@ static void _cws_dispatch(struct cws_data *priv) {
             if (priv->recv.current.used == 0)
                 str = "";
             if (priv->cbs.on_text)
-                priv->cbs.on_text((void *)priv->cbs.data, priv->easy, str, priv->recv.current.used);
+                priv->cbs.on_text((void *)priv->cbs.data, priv->easy, str, (size_t)priv->recv.current.used);
         } else {
             priv->recv.fragmented.payload = priv->recv.current.payload;
             priv->recv.fragmented.used = priv->recv.current.used;
@@ -553,7 +553,7 @@ static void _cws_dispatch(struct cws_data *priv) {
             priv->recv.current.payload = NULL;
             priv->recv.current.used = 0;
             priv->recv.current.total = 0;
-            priv->recv.current.opcode = 0;
+            priv->recv.current.opcode = CWS_OPCODE_CONTINUATION;
             priv->recv.current.fin = 0;
         }
         break;
@@ -561,7 +561,7 @@ static void _cws_dispatch(struct cws_data *priv) {
     case CWS_OPCODE_BINARY:
         if (priv->recv.current.fin) {
             if (priv->cbs.on_binary)
-                priv->cbs.on_binary((void *)priv->cbs.data, priv->easy, priv->recv.current.payload, priv->recv.current.used);
+                priv->cbs.on_binary((void *)priv->cbs.data, priv->easy, priv->recv.current.payload, (size_t)priv->recv.current.used);
         } else {
             priv->recv.fragmented.payload = priv->recv.current.payload;
             priv->recv.fragmented.used = priv->recv.current.used;
@@ -571,7 +571,7 @@ static void _cws_dispatch(struct cws_data *priv) {
             priv->recv.current.payload = NULL;
             priv->recv.current.used = 0;
             priv->recv.current.total = 0;
-            priv->recv.current.opcode = 0;
+            priv->recv.current.opcode = CWS_OPCODE_CONTINUATION;
             priv->recv.current.fin = 0;
         }
         break;
@@ -579,19 +579,19 @@ static void _cws_dispatch(struct cws_data *priv) {
     case CWS_OPCODE_CLOSE: {
         enum cws_close_reason reason = CWS_CLOSE_REASON_NO_REASON;
         const char *str = "";
-        size_t len = priv->recv.current.used;
+        size_t len = (size_t)priv->recv.current.used;
 
         if (priv->recv.current.used >= sizeof(uint16_t)) {
             uint16_t r;
             memcpy(&r, priv->recv.current.payload, sizeof(uint16_t));
             _cws_ntoh(&r, sizeof(r));
-            if (!cws_close_reason_is_valid(r)) {
+            if (!cws_close_reason_is_valid((enum cws_close_reason) r)) {
                 cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, "invalid close reason", SIZE_MAX);
                 r = CWS_CLOSE_REASON_PROTOCOL_ERROR;
             }
-            reason = r;
+            reason = (enum cws_close_reason) r;
             str = (const char *)priv->recv.current.payload + sizeof(uint16_t);
-            len = priv->recv.current.used - 2;
+            len = (size_t)priv->recv.current.used - 2;
         } else if (priv->recv.current.used > 0 && priv->recv.current.used < sizeof(uint16_t)) {
             cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, "invalid close payload length", SIZE_MAX);
         }
@@ -601,7 +601,7 @@ static void _cws_dispatch(struct cws_data *priv) {
 
         if (!priv->closed) {
             if (reason == CWS_CLOSE_REASON_NO_REASON)
-                reason = 0;
+                reason = CWS_CLOSE_REASON_UNKNOWN;
             cws_close(priv->easy, reason, str, len);
         }
         break;
@@ -612,9 +612,9 @@ static void _cws_dispatch(struct cws_data *priv) {
         if (priv->recv.current.used == 0)
             str = "";
         if (priv->cbs.on_ping)
-            priv->cbs.on_ping((void *)priv->cbs.data, priv->easy, str, priv->recv.current.used);
+            priv->cbs.on_ping((void *)priv->cbs.data, priv->easy, str, (size_t)priv->recv.current.used);
         else
-            cws_pong(priv->easy, str, priv->recv.current.used);
+            cws_pong(priv->easy, str, (size_t)priv->recv.current.used);
         break;
     }
 
@@ -623,7 +623,7 @@ static void _cws_dispatch(struct cws_data *priv) {
         if (priv->recv.current.used == 0)
             str = "";
         if (priv->cbs.on_pong)
-            priv->cbs.on_pong((void *)priv->cbs.data, priv->easy, str, priv->recv.current.used);
+            priv->cbs.on_pong((void *)priv->cbs.data, priv->easy, str, (size_t)priv->recv.current.used);
         break;
     }
 
@@ -715,13 +715,13 @@ static size_t _cws_process_frame(struct cws_data *priv, const char *buffer, size
             void *tmp;
 
             tmp = realloc(priv->recv.current.payload,
-                          priv->recv.current.total + frame_len + 1);
+                          (size_t)(priv->recv.current.total + frame_len + 1));
             if (!tmp) {
                 cws_close(priv->easy, CWS_CLOSE_REASON_TOO_BIG, NULL, 0);
                 ERR("could not allocate memory");
                 return CURL_READFUNC_ABORT;
             }
-            priv->recv.current.payload = tmp;
+            priv->recv.current.payload = (uint8_t *)tmp;
             priv->recv.current.total += frame_len;
         }
     }
@@ -731,7 +731,7 @@ static size_t _cws_process_frame(struct cws_data *priv, const char *buffer, size
 
     /* fill payload */
     while (len > 0 && priv->recv.current.used < priv->recv.current.total) {
-        size_t todo = priv->recv.current.total - priv->recv.current.used;
+        size_t todo = (size_t)(priv->recv.current.total - priv->recv.current.used);
         if (todo > len)
             todo = len;
         memcpy(priv->recv.current.payload + priv->recv.current.used, buffer, todo);
