@@ -219,38 +219,31 @@ static inline bool _cws_header_has_prefix(const char *buffer, const size_t bufle
     return strncasecmp(buffer, prefix, prefixlen) == 0;
 }
 
-static inline void _cws_hton(void *mem, uint8_t len)
-{
-#if __BYTE_ORDER__ != __BIG_ENDIAN
-    uint8_t *bytes;
-    uint8_t i, mid;
-
-    if (len % 2) return;
-
-    mid = len / 2;
-    bytes = mem;
-    for (i = 0; i < mid; i++) {
-        uint8_t tmp = bytes[i];
-        bytes[i] = bytes[len - i - 1];
-        bytes[len - i - 1] = tmp;
-    }
+#include <stdint.h>
+#ifndef IS_LITTLE_ENDIAN
+#define IS_LITTLE_ENDIAN (*(uint16_t*)"\0\1">>8)
 #endif
+#ifndef IS_BIG_ENDIAN
+#define IS_BIG_ENDIAN (*(uint16_t*)"\1\0">>8)
+#endif
+
+static inline void _cws_hton(void *mem, size_t len) {
+    if (IS_LITTLE_ENDIAN) {
+        uint8_t *bytes;
+        size_t i, mid;
+
+        if (len % 2) return;
+
+        mid = len / 2;
+        bytes = (uint8_t *)mem;
+        for (i = 0; i < mid; i++) {
+            uint8_t tmp = bytes[i];
+            bytes[i] = bytes[len - i - 1];
+            bytes[len - i - 1] = tmp;
+        }
+    }
 }
 
-static inline void _cws_ntoh(void *mem, uint8_t len)
-{
-#if __BYTE_ORDER__ != __BIG_ENDIAN
-    uint8_t *bytes;
-    uint8_t i, mid;
-
-    if (len % 2) return;
-
-    mid = len / 2;
-    bytes = mem;
-    for (i = 0; i < mid; i++) {
-        uint8_t tmp = bytes[i];
-        bytes[i] = bytes[len - i - 1];
-        bytes[len - i - 1] = tmp;
-    }
-#endif
+static inline void _cws_ntoh(void *mem, size_t len) {
+    _cws_hton(mem, len);
 }
