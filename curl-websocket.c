@@ -261,30 +261,26 @@ static bool _cws_send(struct cws_data *priv, enum cws_opcode opcode, const void 
 }
 
 bool cws_send(CURL *easy, bool text, const void *msg, size_t msglen) {
-    struct cws_data *priv;
-    char *p = NULL;
+    struct cws_data *priv = NULL;
 
-    curl_easy_getinfo(easy, CURLINFO_PRIVATE, &p); /* checks for char* */
-    if (!p) {
+    curl_easy_getinfo(easy, CURLINFO_PRIVATE, (char *)&priv); /* checks for char* */
+    if (!priv) {
         ERR("not CWS (no CURLINFO_PRIVATE): %p", easy);
         return false;
     }
-    priv = (struct cws_data *)p;
 
     return _cws_send(priv, text ? CWS_OPCODE_TEXT : CWS_OPCODE_BINARY,
                      msg, msglen);
 }
 
 bool cws_ping(CURL *easy, const char *reason, size_t len) {
-    struct cws_data *priv;
-    char *p = NULL;
+    struct cws_data *priv = NULL;
 
-    curl_easy_getinfo(easy, CURLINFO_PRIVATE, &p); /* checks for char* */
-    if (!p) {
+    curl_easy_getinfo(easy, CURLINFO_PRIVATE, (char *)&priv); /* checks for char* */
+    if (!priv) {
         ERR("not CWS (no CURLINFO_PRIVATE): %p", easy);
         return false;
     }
-    priv = (struct cws_data *)p;
 
     if (len == SIZE_MAX) {
         if (reason)
@@ -297,15 +293,13 @@ bool cws_ping(CURL *easy, const char *reason, size_t len) {
 }
 
 bool cws_pong(CURL *easy, const char *reason, size_t len) {
-    struct cws_data *priv;
-    char *p = NULL;
+    struct cws_data *priv = NULL;
 
-    curl_easy_getinfo(easy, CURLINFO_PRIVATE, &p); /* checks for char* */
-    if (!p) {
+    curl_easy_getinfo(easy, CURLINFO_PRIVATE, (char *)&priv); /* checks for char* */
+    if (!priv) {
         ERR("not CWS (no CURLINFO_PRIVATE): %p", easy);
         return false;
     }
-    priv = (struct cws_data *)p;
 
     if (len == SIZE_MAX) {
         if (reason)
@@ -341,19 +335,18 @@ static void _cws_cleanup(struct cws_data *priv) {
 }
 
 bool cws_close(CURL *easy, enum cws_close_reason reason, const char *reason_text, size_t reason_text_len) {
-    struct cws_data *priv;
+    struct cws_data *priv = NULL;
     size_t len;
     uint16_t r;
     bool ret;
     char *p = NULL;
 
-    curl_easy_getinfo(easy, CURLINFO_PRIVATE, &p); /* checks for char* */
-    if (!p) {
+    curl_easy_getinfo(easy, CURLINFO_PRIVATE, (char *)&priv); /* checks for char* */
+    if (!priv) {
         ERR("not CWS (no CURLINFO_PRIVATE): %p", easy);
         return false;
     }
     curl_easy_setopt(easy, CURLOPT_TIMEOUT, 2);
-    priv = (struct cws_data *)p;
 
     if (reason == 0) {
         ret = _cws_send(priv, CWS_OPCODE_CLOSE, NULL, 0);
@@ -945,12 +938,10 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
 
 void cws_free(CURL *easy) {
     struct cws_data *priv;
-    char *p = NULL;
 
-    curl_easy_getinfo(easy, CURLINFO_PRIVATE, &p); /* checks for char* */
-    if (!p)
+    curl_easy_getinfo(easy, CURLINFO_PRIVATE, (char *)&priv); /* checks for char* */
+    if (!priv)
         return;
-    priv = (struct cws_data *)p;
 
     priv->deleted = true;
     _cws_cleanup(priv);
