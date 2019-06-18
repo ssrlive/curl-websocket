@@ -36,6 +36,7 @@ extern "C" {
 
 /* see https://tools.ietf.org/html/rfc6455#section-7.4.1 */
 enum cws_close_reason {
+    CWS_CLOSE_REASON_UNKNOWN = 0,
     CWS_CLOSE_REASON_NORMAL = 1000,
     CWS_CLOSE_REASON_GOING_AWAY = 1001,
     CWS_CLOSE_REASON_PROTOCOL_ERROR = 1002,
