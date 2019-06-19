@@ -47,7 +47,7 @@ static inline void _cws_debug(const char *prefix, const void *buffer, size_t len
         fprintf(stderr, "\n");
 }
 
-static void _cws_sha1(const void *input, const size_t input_len, void *output) {
+static void _cws_sha1(const void *input, size_t input_len, uint8_t output[20]) {
 #if 0
     static const EVP_MD *md = NULL;
     EVP_MD_CTX *ctx;
@@ -165,7 +165,7 @@ static void random_bytes_generator(const char *seed, uint8_t *output, size_t len
     mbedtls_ctr_drbg_free(&ctr_drbg);
 }
 
-static void _cws_get_random(void *buffer, size_t len)
+static void _cws_get_random(uint8_t *buffer, size_t len)
 {
 #if 0
     uint8_t *bytes = buffer;
@@ -212,27 +212,26 @@ static inline void _cws_trim(const char **p_buffer, size_t *p_len)
     *p_len = len;
 }
 
-static inline bool _cws_header_has_prefix(const char *buffer, const size_t buflen, const char *prefix) {
-    const size_t prefixlen = strlen(prefix);
+static inline bool _cws_header_has_prefix(const char *buffer, size_t buflen, const char *prefix) {
+    size_t prefixlen = strlen(prefix);
     if (buflen < prefixlen)
         return false;
     return strncasecmp(buffer, prefix, prefixlen) == 0;
 }
 
 #include <stdint.h>
-#ifndef IS_LITTLE_ENDIAN
-#define IS_LITTLE_ENDIAN (*(uint16_t*)"\0\1">>8)
-#endif
-#ifndef IS_BIG_ENDIAN
-#define IS_BIG_ENDIAN (*(uint16_t*)"\1\0">>8)
-#endif
+#undef IS_LITTLE_ENDIAN
+#define IS_LITTLE_ENDIAN() (*(uint16_t*)"\0\1">>8)
+
+#undef IS_BIG_ENDIAN
+#define IS_BIG_ENDIAN() (*(uint16_t*)"\1\0">>8)
 
 static inline void _cws_hton(void *mem, size_t len) {
-    if (IS_LITTLE_ENDIAN) {
+    if ( IS_LITTLE_ENDIAN() ) {
         uint8_t *bytes;
         size_t i, mid;
 
-        if (len % 2) return;
+        if (len % 2) { return; }
 
         mid = len / 2;
         bytes = (uint8_t *)mem;
