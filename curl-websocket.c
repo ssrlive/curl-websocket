@@ -29,7 +29,7 @@
 //#include <inttypes.h>
 #include <errno.h>
 
-#include "curl-websocket-utils.c"
+#include "curl-websocket-utils.h"
 
 #define ERR(fmt, ...)                                   \
     fprintf(stderr, "ERROR: " fmt "\n", ## __VA_ARGS__)

@@ -24,9 +24,13 @@
 #include <mbedtls/sha1.h>
 #include <mbedtls/base64.h>
 
-#include "curl-websocket.h"
+#include "curl-websocket-utils.h"
 
-static inline void _cws_debug(const char *prefix, const void *buffer, size_t len)
+#if defined(_MSC_VER)
+#define strncasecmp _strnicmp
+#endif // defined(_MSC_VER)
+
+void _cws_debug(const char *prefix, const void *buffer, size_t len)
 {
     const uint8_t *bytes = (const uint8_t *) buffer;
     size_t i;
@@ -43,7 +47,7 @@ static inline void _cws_debug(const char *prefix, const void *buffer, size_t len
         fprintf(stderr, "\n");
 }
 
-static void _cws_sha1(const void *input, size_t input_len, uint8_t output[20]) {
+void _cws_sha1(const void *input, size_t input_len, uint8_t output[20]) {
     mbedtls_sha1_context sha1_ctx = { 0 };
 #ifndef SHA_DIGEST_LENGTH
 #define SHA_DIGEST_LENGTH 20
@@ -59,7 +63,7 @@ static void _cws_sha1(const void *input, size_t input_len, uint8_t output[20]) {
     memcpy(output, sha1_hash, SHA_DIGEST_LENGTH);
 }
 
-static void _cws_encode_base64(const uint8_t *input, size_t input_len, char *output, size_t out_len)
+void _cws_encode_base64(const uint8_t *input, size_t input_len, char *output, size_t out_len)
 {
     size_t b64_str_len = 0;
     char *b64_str;
@@ -98,7 +102,7 @@ static void random_bytes_generator(const char *seed, uint8_t *output, size_t len
     mbedtls_ctr_drbg_free(&ctr_drbg);
 }
 
-static void _cws_get_random(uint8_t *buffer, size_t len)
+void _cws_get_random(uint8_t *buffer, size_t len)
 {
     static int count = 0;
     char seed[0x100] = { 0 };
@@ -107,7 +111,7 @@ static void _cws_get_random(uint8_t *buffer, size_t len)
     random_bytes_generator(seed, (uint8_t *)buffer, len);
 }
 
-static inline void _cws_trim(const char **p_buffer, size_t *p_len)
+void _cws_trim(const char **p_buffer, size_t *p_len)
 {
     const char *buffer = *p_buffer;
     size_t len = *p_len;
@@ -124,7 +128,7 @@ static inline void _cws_trim(const char **p_buffer, size_t *p_len)
     *p_len = len;
 }
 
-static inline bool _cws_header_has_prefix(const char *buffer, size_t buflen, const char *prefix) {
+bool _cws_header_has_prefix(const char *buffer, size_t buflen, const char *prefix) {
     size_t prefixlen = strlen(prefix);
     if (buflen < prefixlen)
         return false;
@@ -138,7 +142,7 @@ static inline bool _cws_header_has_prefix(const char *buffer, size_t buflen, con
 #undef IS_BIG_ENDIAN
 #define IS_BIG_ENDIAN() (*(uint16_t*)"\1\0">>8)
 
-static inline void _cws_hton(void *mem, size_t len) {
+void _cws_hton(void *mem, size_t len) {
     if ( IS_LITTLE_ENDIAN() ) {
         uint8_t *bytes;
         size_t i, mid;
@@ -155,6 +159,6 @@ static inline void _cws_hton(void *mem, size_t len) {
     }
 }
 
-static inline void _cws_ntoh(void *mem, size_t len) {
+void _cws_ntoh(void *mem, size_t len) {
     _cws_hton(mem, len);
 }
