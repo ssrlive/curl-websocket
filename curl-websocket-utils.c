@@ -21,12 +21,8 @@
 #include <string.h>
 #include <assert.h>
 
-#if 0
-#include <openssl/evp.h>
-#else
 #include <mbedtls/sha1.h>
 #include <mbedtls/base64.h>
-#endif
 
 #include "curl-websocket.h"
 
@@ -48,23 +44,6 @@ static inline void _cws_debug(const char *prefix, const void *buffer, size_t len
 }
 
 static void _cws_sha1(const void *input, size_t input_len, uint8_t output[20]) {
-#if 0
-    static const EVP_MD *md = NULL;
-    EVP_MD_CTX *ctx;
-
-    if (!md) {
-        OpenSSL_add_all_digests();
-        md = EVP_get_digestbyname("sha1");
-    }
-
-    ctx = EVP_MD_CTX_new(); // EVP_MD_CTX_init(&ctx);
-    EVP_DigestInit_ex(ctx, md, NULL);
-
-    EVP_DigestUpdate(ctx, input, input_len);
-    EVP_DigestFinal_ex(ctx, output, NULL);
-
-    EVP_MD_CTX_free(ctx); // EVP_MD_CTX_cleanup(ctx);
-#else
     mbedtls_sha1_context sha1_ctx = { 0 };
 #ifndef SHA_DIGEST_LENGTH
 #define SHA_DIGEST_LENGTH 20
@@ -78,55 +57,10 @@ static void _cws_sha1(const void *input, size_t input_len, uint8_t output[20]) {
     mbedtls_sha1_free(&sha1_ctx);
 
     memcpy(output, sha1_hash, SHA_DIGEST_LENGTH);
-#endif
 }
 
 static void _cws_encode_base64(const uint8_t *input, size_t input_len, char *output, size_t out_len)
 {
-#if 0
-    static const char base64_map[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-    size_t i, o;
-    uint8_t c;
-
-    for (i = 0, o = 0; i + 3 <= input_len; i += 3) {
-        c = (input[i] & (((1 << 6) - 1) << 2)) >> 2;
-        output[o++] = base64_map[c];
-
-        c = (input[i] & ((1 << 2) - 1)) << 4;
-        c |= (input[i + 1] & (((1 << 4) - 1) << 4)) >> 4;
-        output[o++] = base64_map[c];
-
-        c = (input[i + 1] & ((1 << 4) - 1)) << 2;
-        c |= (input[i + 2] & (((1 << 2) - 1) << 6)) >> 6;
-        output[o++] = base64_map[c];
-
-        c = input[i + 2] & ((1 << 6) - 1);
-        output[o++] = base64_map[c];
-    }
-
-    if (i + 1 == input_len) {
-        c = (input[i] & (((1 << 6) - 1) << 2)) >> 2;
-        output[o++] = base64_map[c];
-
-        c = (input[i] & ((1 << 2) - 1)) << 4;
-        output[o++] = base64_map[c];
-
-        output[o++] = base64_map[64];
-        output[o++] = base64_map[64];
-    } else if (i + 2 == input_len) {
-        c = (input[i] & (((1 << 6) - 1) << 2)) >> 2;
-        output[o++] = base64_map[c];
-
-        c = (input[i] & ((1 << 2) - 1)) << 4;
-        c |= (input[i + 1] & (((1 << 4) - 1) << 4)) >> 4;
-        output[o++] = base64_map[c];
-
-        c = (input[i + 1] & ((1 << 4) - 1)) << 2;
-        output[o++] = base64_map[c];
-
-        output[o++] = base64_map[64];
-    }
-#else
     size_t b64_str_len = 0;
     char *b64_str;
 
@@ -142,7 +76,6 @@ static void _cws_encode_base64(const uint8_t *input, size_t input_len, char *out
         assert(0);
     }
     free(b64_str);
-#endif
 }
 
 #include <mbedtls/ctr_drbg.h>
@@ -167,32 +100,11 @@ static void random_bytes_generator(const char *seed, uint8_t *output, size_t len
 
 static void _cws_get_random(uint8_t *buffer, size_t len)
 {
-#if 0
-    uint8_t *bytes = buffer;
-    uint8_t *bytes_end = bytes + len;
-    int fd = open("/dev/urandom", O_RDONLY);
-    if (fd >= 0) {
-        do {
-            ssize_t r = read(fd, bytes, bytes_end - bytes);
-            if (r < 0) {
-                close(fd);
-                goto fallback;
-            }
-            bytes += r;
-        } while (bytes < bytes_end);
-        close(fd);
-    } else {
-      fallback:
-        for (; bytes < bytes_end; bytes++)
-            *bytes = random() & 0xff;
-    }
-#else
     static int count = 0;
     char seed[0x100] = { 0 };
     sprintf(seed, "seed %d seed %d", count, count+1);
     count++;
     random_bytes_generator(seed, (uint8_t *)buffer, len);
-#endif
 }
 
 static inline void _cws_trim(const char **p_buffer, size_t *p_len)
