@@ -41,16 +41,16 @@
  */
 #define CWS_MASK_TMPBUF_SIZE 4096
 
-enum cws_opcode {
+typedef enum cws_opcode {
     CWS_OPCODE_CONTINUATION = 0x0,
     CWS_OPCODE_TEXT = 0x1,
     CWS_OPCODE_BINARY = 0x2,
     CWS_OPCODE_CLOSE = 0x8,
     CWS_OPCODE_PING = 0x9,
     CWS_OPCODE_PONG = 0xa,
-};
+} cws_opcode;
 
-static bool cws_opcode_is_control(enum cws_opcode opcode) {
+static bool cws_opcode_is_control(cws_opcode opcode) {
     switch (opcode) {
     case CWS_OPCODE_CONTINUATION:
     case CWS_OPCODE_TEXT:
@@ -133,6 +133,8 @@ struct cws_frame_header {
     uint8_t mask : 1; /* if 1, uses 4 extra bytes */
 };
 
+#define CWS_HDR_SIZE sizeof(struct cws_frame_header)
+
 struct cws_data {
     CURL *easy;
     struct cws_callbacks cbs;
@@ -147,17 +149,17 @@ struct cws_data {
             uint8_t *payload;
             uint64_t used;
             uint64_t total;
-            enum cws_opcode opcode;
+            cws_opcode opcode;
             bool fin;
         } current;
         struct {
             uint8_t *payload;
             uint64_t used;
             uint64_t total;
-            enum cws_opcode opcode;
+            cws_opcode opcode;
         } fragmented;
 
-        uint8_t tmpbuf[sizeof(struct cws_frame_header) + sizeof(uint64_t)];
+        uint8_t tmpbuf[CWS_HDR_SIZE + sizeof(uint64_t)];
         uint8_t done; /* of tmpbuf, for header */
         uint8_t needed; /* of tmpbuf, for header */
     } recv;
@@ -174,7 +176,7 @@ struct cws_data {
     bool deleted;
 };
 
-static bool _cws_write(struct cws_data *priv, const void *buffer, size_t len) {
+static bool _cws_growth_send_buffer(struct cws_data *priv, const void *buffer, size_t len) {
     /* optimization note: we could grow by some rounded amount (ie:
      * next power-of-2, 4096/pagesize...) and if using
      * priv->send.position, do the memmove() here to free up some
@@ -182,8 +184,9 @@ static bool _cws_write(struct cws_data *priv, const void *buffer, size_t len) {
      */
     //_cws_debug("WRITE", buffer, len);
     uint8_t *tmp = (uint8_t *) realloc(priv->send.buffer, priv->send.len + len);
-    if (!tmp)
+    if (!tmp) {
         return false;
+    }
     memcpy(tmp + priv->send.len, buffer, len);
     priv->send.buffer = tmp;
     priv->send.len += len;
@@ -203,7 +206,7 @@ static bool _cws_write(struct cws_data *priv, const void *buffer, size_t len) {
  * Here a temporary buffer is used to reduce number of "write" calls
  * and pointer arithmetic to avoid counters.
  */
-static bool _cws_write_masked(struct cws_data *priv, const uint8_t mask[4], const void *buffer, size_t len) {
+static bool _cws_growth_send_buffer_masked(struct cws_data *priv, const uint8_t mask[4], const void *buffer, size_t len) {
     const uint8_t *itr_begin = (const uint8_t *)buffer;
     const uint8_t *itr = itr_begin;
     const uint8_t *itr_end = itr + len;
@@ -214,20 +217,20 @@ static bool _cws_write_masked(struct cws_data *priv, const uint8_t mask[4], cons
         for (; o < o_end && itr < itr_end; o++, itr++) {
             *o = *itr ^ mask[(itr - itr_begin) & 0x3];
         }
-        if (!_cws_write(priv, tmpbuf, o - tmpbuf))
+        if (!_cws_growth_send_buffer(priv, tmpbuf, o - tmpbuf))
             return false;
     }
 
     return true;
 }
 
-static bool _cws_send(struct cws_data *priv, enum cws_opcode opcode, const void *msg, size_t msglen) {
+static bool _cws_build_send_buffer(struct cws_data *priv, cws_opcode opcode, const void *msg, size_t msglen) {
     struct cws_frame_header fh = {
         /* .opcode = */ opcode,
         0,
         /* .fin = */ 1, /* TODO review if should fragment over some boundary */
         /* .payload_len = */ ((msglen > UINT16_MAX) ? 127 :
-                        (msglen > 125) ? 126 : msglen),
+                        (msglen > 125) ? 126 : (uint8_t)msglen),
         /* .mask = */ 1,
     };
     uint8_t mask[4];
@@ -239,25 +242,26 @@ static bool _cws_send(struct cws_data *priv, enum cws_opcode opcode, const void 
 
     _cws_get_random(mask, sizeof(mask));
 
-    if (!_cws_write(priv, &fh, sizeof(fh)))
+    if (!_cws_growth_send_buffer(priv, &fh, sizeof(fh)))
         return false;
 
     if (fh.payload_len == 127) {
         uint64_t payload_len = msglen;
         _cws_hton(&payload_len, sizeof(payload_len));
-        if (!_cws_write(priv, &payload_len, sizeof(payload_len)))
+        if (!_cws_growth_send_buffer(priv, &payload_len, sizeof(payload_len)))
             return false;
     } else if (fh.payload_len == 126) {
         uint16_t payload_len = msglen;
         _cws_hton(&payload_len, sizeof(payload_len));
-        if (!_cws_write(priv, &payload_len, sizeof(payload_len)))
+        if (!_cws_growth_send_buffer(priv, &payload_len, sizeof(payload_len)))
             return false;
     }
 
-    if (!_cws_write(priv, mask, sizeof(mask)))
+    if (!_cws_growth_send_buffer(priv, mask, sizeof(mask))) {
         return false;
+    }
 
-    return _cws_write_masked(priv, mask, msg, msglen);
+    return _cws_growth_send_buffer_masked(priv, mask, msg, msglen);
 }
 
 bool cws_send(CURL *easy, bool text, const void *msg, size_t msglen) {
@@ -269,8 +273,7 @@ bool cws_send(CURL *easy, bool text, const void *msg, size_t msglen) {
         return false;
     }
 
-    return _cws_send(priv, text ? CWS_OPCODE_TEXT : CWS_OPCODE_BINARY,
-                     msg, msglen);
+    return _cws_build_send_buffer(priv, text ? CWS_OPCODE_TEXT : CWS_OPCODE_BINARY, msg, msglen);
 }
 
 bool cws_ping(CURL *easy, const char *reason, size_t len) {
@@ -289,7 +292,7 @@ bool cws_ping(CURL *easy, const char *reason, size_t len) {
             len = 0;
     }
 
-    return _cws_send(priv, CWS_OPCODE_PING, reason, len);
+    return _cws_build_send_buffer(priv, CWS_OPCODE_PING, reason, len);
 }
 
 bool cws_pong(CURL *easy, const char *reason, size_t len) {
@@ -308,7 +311,7 @@ bool cws_pong(CURL *easy, const char *reason, size_t len) {
             len = 0;
     }
 
-    return _cws_send(priv, CWS_OPCODE_PONG, reason, len);
+    return _cws_build_send_buffer(priv, CWS_OPCODE_PONG, reason, len);
 }
 
 static void _cws_cleanup(struct cws_data *priv) {
@@ -349,7 +352,7 @@ bool cws_close(CURL *easy, cws_close_reason reason, const char *reason_text, siz
     curl_easy_setopt(easy, CURLOPT_TIMEOUT, 2);
 
     if (reason == 0) {
-        ret = _cws_send(priv, CWS_OPCODE_CLOSE, NULL, 0);
+        ret = _cws_build_send_buffer(priv, CWS_OPCODE_CLOSE, NULL, 0);
         priv->closed = true;
         return ret;
     }
@@ -368,7 +371,7 @@ bool cws_close(CURL *easy, cws_close_reason reason, const char *reason_text, siz
     if (reason_text_len)
         memcpy(p + sizeof(uint16_t), reason_text, reason_text_len);
 
-    ret = _cws_send(priv, CWS_OPCODE_CLOSE, p, len);
+    ret = _cws_build_send_buffer(priv, CWS_OPCODE_CLOSE, p, len);
     free(p);
     priv->closed = true;
     return ret;
@@ -653,44 +656,44 @@ static size_t _cws_process_frame(struct cws_data *priv, const char *buffer, size
             len -= todo;
         }
 
-        if (priv->recv.needed != priv->recv.done)
+        if (priv->recv.needed != priv->recv.done) {
             continue;
+        }
 
-        if (priv->recv.needed == sizeof(struct cws_frame_header)) {
+        if (priv->recv.needed == CWS_HDR_SIZE) {
             struct cws_frame_header fh;
 
-            memcpy(&fh, priv->recv.tmpbuf, sizeof(struct cws_frame_header));
-            priv->recv.current.opcode = (enum cws_opcode) fh.opcode;
+            memcpy(&fh, priv->recv.tmpbuf, CWS_HDR_SIZE);
+            priv->recv.current.opcode = (cws_opcode) fh.opcode;
             priv->recv.current.fin = fh.fin;
 
-            if (fh._reserved || fh.mask)
+            if (fh._reserved || fh.mask) {
                 cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, NULL, 0);
+            }
 
             if (fh.payload_len == 126) {
-                if (cws_opcode_is_control((enum cws_opcode) fh.opcode))
+                if (cws_opcode_is_control((cws_opcode) fh.opcode)) {
                     cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, NULL, 0);
+                }
                 priv->recv.needed += sizeof(uint16_t);
                 continue;
             } else if (fh.payload_len == 127) {
-                if (cws_opcode_is_control((enum cws_opcode) fh.opcode))
+                if (cws_opcode_is_control((cws_opcode) fh.opcode)) {
                     cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, NULL, 0);
+                }
                 priv->recv.needed += sizeof(uint64_t);
                 continue;
-            } else
+            } else {
                 frame_len = fh.payload_len;
-        } else if (priv->recv.needed == sizeof(struct cws_frame_header) + sizeof(uint16_t)) {
+            }
+        } else if (priv->recv.needed == CWS_HDR_SIZE + sizeof(uint16_t)) {
             uint16_t plen;
-
-            memcpy(&plen,
-                   priv->recv.tmpbuf + sizeof(struct cws_frame_header),
-                   sizeof(plen));
+            memcpy(&plen, priv->recv.tmpbuf + CWS_HDR_SIZE, sizeof(plen));
             _cws_ntoh(&plen, sizeof(plen));
             frame_len = plen;
-        } else if (priv->recv.needed == sizeof(struct cws_frame_header) + sizeof(uint64_t)) {
+        } else if (priv->recv.needed == CWS_HDR_SIZE + sizeof(uint64_t)) {
             uint64_t plen;
-
-            memcpy(&plen, priv->recv.tmpbuf + sizeof(struct cws_frame_header),
-                   sizeof(plen));
+            memcpy(&plen, priv->recv.tmpbuf + CWS_HDR_SIZE, sizeof(plen));
             _cws_ntoh(&plen, sizeof(plen));
             frame_len = plen;
         } else {
@@ -699,11 +702,12 @@ static size_t _cws_process_frame(struct cws_data *priv, const char *buffer, size
         }
 
         if (priv->recv.current.opcode == CWS_OPCODE_CONTINUATION) {
-            if (priv->recv.fragmented.opcode == 0)
+            if (priv->recv.fragmented.opcode == 0) {
                 cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, "nothing to continue", SIZE_MAX);
-            if (priv->recv.current.payload)
+            }
+            if (priv->recv.current.payload) {
                 free(priv->recv.current.payload);
-
+            }
             priv->recv.current.payload = priv->recv.fragmented.payload;
             priv->recv.current.used = priv->recv.fragmented.used;
             priv->recv.current.total = priv->recv.fragmented.total;
@@ -755,7 +759,7 @@ static size_t _cws_process_frame(struct cws_data *priv, const char *buffer, size
     _cws_dispatch(priv);
 
     priv->recv.done = 0;
-    priv->recv.needed = sizeof(struct cws_frame_header);
+    priv->recv.needed = CWS_HDR_SIZE;
     priv->recv.current.used = 0;
     priv->recv.current.total = 0;
 
@@ -794,7 +798,7 @@ static size_t _cws_send_data(char *buffer, size_t count, size_t nitems, void *da
         /* optimization note: we could avoid memmove() by keeping a
          * priv->send.position, then we just increment that offset.
          *
-         * on next _cws_write(), check if priv->send.position > 0 and
+         * on next _cws_growth_send_buffer(), check if priv->send.position > 0 and
          * memmove() to make some space without realloc().
          */
         memmove(priv->send.buffer,
@@ -859,7 +863,7 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
     if (callbacks)
         priv->cbs = *callbacks;
 
-    priv->recv.needed = sizeof(struct cws_frame_header);
+    priv->recv.needed = CWS_HDR_SIZE;
     priv->recv.done = 0;
 
 #define WS_HDR      "ws://"
