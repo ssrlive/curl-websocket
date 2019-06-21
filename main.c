@@ -111,7 +111,8 @@ static void a_main_loop(struct myapp_ctx *ctx) {
         /* See how the transfers went */
         while ((msg = curl_multi_info_read(multi, &msgs_left))) {
             if (msg->msg == CURLMSG_DONE) {
-                printf("HTTP completed with status %d '%s'\n", msg->data.result, curl_easy_strerror(msg->data.result));
+                CURLcode result = msg->data.result;
+                printf("HTTP completed with status %d '%s'\n", result, curl_easy_strerror(result));
             }
         }
     } while (still_running && ctx->running);
@@ -191,6 +192,7 @@ static void on_ping(void *data, CURL *easy, const char *reason, size_t len) {
 }
 
 static void on_pong(void *data, CURL *easy, const char *reason, size_t len) {
+    struct myapp_ctx *ctx = (struct myapp_ctx *) data;
     fprintf(stderr, "INFO: PONG %d bytes='%s'\n", (int)len, reason);
 
     cws_close(easy, CWS_CLOSE_REASON_NORMAL, "close it!", SIZE_MAX);
@@ -198,12 +200,11 @@ static void on_pong(void *data, CURL *easy, const char *reason, size_t len) {
     (void)easy;
 }
 
-static void on_close(void *data, CURL *easy, enum cws_close_reason reason, const char *reason_text, size_t reason_text_len) {
+static void on_close(void *data, CURL *easy, cws_close_reason reason, const char *info, size_t len) {
     struct myapp_ctx *ctx = (struct myapp_ctx *) data;
-    fprintf(stderr, "INFO: CLOSE=%4d %d bytes '%s'\n", reason, (int)reason_text_len, reason_text);
+    fprintf(stderr, "INFO: CLOSE=%4d %d bytes '%s'\n", reason, (int)len, info);
 
-    ctx->exitval = (reason == CWS_CLOSE_REASON_NORMAL ?
-                    EXIT_SUCCESS : EXIT_FAILURE);
+    ctx->exitval = (reason == CWS_CLOSE_REASON_NORMAL ? EXIT_SUCCESS : EXIT_FAILURE);
     ctx->running = false;
     (void)easy;
 }
@@ -211,9 +212,9 @@ static void on_close(void *data, CURL *easy, enum cws_close_reason reason, const
 int main(int argc, char *argv[]) {
     const char *url;
     const char *protocols;
-    struct myapp_ctx myapp_ctx = {
-        NULL,
-        NULL,
+    struct myapp_ctx _myapp_ctx = {
+        /* .easy = */ NULL,
+        /* .multi = */ NULL,
         /* .text_lines = */ 0,
         /* .binary_lines = */ 0,
         /* .exitval = */ EXIT_SUCCESS,
@@ -225,7 +226,7 @@ int main(int argc, char *argv[]) {
         /* .on_ping = */ on_ping,
         /* .on_pong = */ on_pong,
         /* .on_close = */ on_close,
-        /* .data = */ &myapp_ctx,
+        /* .data = */ &_myapp_ctx,
     };
 
     if (argc <= 1) {
@@ -249,36 +250,36 @@ int main(int argc, char *argv[]) {
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
-    myapp_ctx.easy = cws_new(url, protocols, &cbs);
-    if (!myapp_ctx.easy)
+    _myapp_ctx.easy = cws_new(url, protocols, &cbs);
+    if (!_myapp_ctx.easy)
         goto error_easy;
 
     /* here you should do any extra sets, like cookies, auth... */
-    curl_easy_setopt(myapp_ctx.easy, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(myapp_ctx.easy, CURLOPT_VERBOSE, 1L);
-    curl_easy_setopt(myapp_ctx.easy, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(_myapp_ctx.easy, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(_myapp_ctx.easy, CURLOPT_VERBOSE, 1L);
+    curl_easy_setopt(_myapp_ctx.easy, CURLOPT_SSL_VERIFYPEER, 0L);
 
     /*
      * This is a traditional curl_multi app, see:
      *
      * https://curl.haxx.se/libcurl/c/multi-app.html
      */
-    myapp_ctx.multi = curl_multi_init();
-    if (!myapp_ctx.multi)
+    _myapp_ctx.multi = curl_multi_init();
+    if (!_myapp_ctx.multi)
         goto error_multi;
 
-    curl_multi_add_handle(myapp_ctx.multi, myapp_ctx.easy);
+    curl_multi_add_handle(_myapp_ctx.multi, _myapp_ctx.easy);
 
-    myapp_ctx.running = true;
-    a_main_loop(&myapp_ctx);
+    _myapp_ctx.running = true;
+    a_main_loop(&_myapp_ctx);
 
-    curl_multi_remove_handle(myapp_ctx.multi, myapp_ctx.easy);
-    curl_multi_cleanup(myapp_ctx.multi);
+    curl_multi_remove_handle(_myapp_ctx.multi, _myapp_ctx.easy);
+    curl_multi_cleanup(_myapp_ctx.multi);
 
   error_multi:
-    cws_free(myapp_ctx.easy);
+    cws_free(_myapp_ctx.easy);
   error_easy:
     curl_global_cleanup();
 
-    return myapp_ctx.exitval;
+    return _myapp_ctx.exitval;
 }

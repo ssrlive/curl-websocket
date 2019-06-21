@@ -35,7 +35,7 @@ extern "C" {
 #endif
 
 /* see https://tools.ietf.org/html/rfc6455#section-7.4.1 */
-enum cws_close_reason {
+typedef enum cws_close_reason {
     CWS_CLOSE_REASON_UNKNOWN = 0,
     CWS_CLOSE_REASON_NORMAL = 1000,
     CWS_CLOSE_REASON_GOING_AWAY = 1001,
@@ -52,7 +52,7 @@ enum cws_close_reason {
     CWS_CLOSE_REASON_IANA_REGISTRY_END = 3999,
     CWS_CLOSE_REASON_PRIVATE_START = 4000,
     CWS_CLOSE_REASON_PRIVATE_END = 4999
-};
+} cws_close_reason;
 
 struct cws_callbacks {
     /**
@@ -91,7 +91,7 @@ struct cws_callbacks {
      * Clients should not transmit any more data after the server is
      * closed, just call cws_free().
      */
-    void (*on_close)(void *data, CURL *easy, enum cws_close_reason reason, const char *reason_text, size_t reason_text_len);
+    void (*on_close)(void *data, CURL *easy, cws_close_reason reason, const char *info, size_t len);
     const void *data;
 };
 
@@ -196,7 +196,7 @@ bool cws_pong(CURL *easy, const char *reason, size_t len);
  *        #NULL.
  * @return #true if sent, #false on errors.
  */
-bool cws_close(CURL *easy, enum cws_close_reason reason, const char *reason_text, size_t reason_text_len);
+bool cws_close(CURL *easy, cws_close_reason reason, const char *reason_text, size_t reason_text_len);
 
 #ifdef __cplusplus
 }

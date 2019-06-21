@@ -65,7 +65,7 @@ static bool cws_opcode_is_control(enum cws_opcode opcode) {
     return true;
 }
 
-static bool cws_close_reason_is_valid(enum cws_close_reason r) {
+static bool cws_close_reason_is_valid(cws_close_reason r) {
     switch (r) {
     case CWS_CLOSE_REASON_NORMAL:
     case CWS_CLOSE_REASON_GOING_AWAY:
@@ -334,7 +334,7 @@ static void _cws_cleanup(struct cws_data *priv) {
     curl_easy_cleanup(easy);
 }
 
-bool cws_close(CURL *easy, enum cws_close_reason reason, const char *reason_text, size_t reason_text_len) {
+bool cws_close(CURL *easy, cws_close_reason reason, const char *reason_text, size_t reason_text_len) {
     struct cws_data *priv = NULL;
     size_t len;
     uint16_t r;
@@ -362,7 +362,7 @@ bool cws_close(CURL *easy, enum cws_close_reason reason, const char *reason_text
         reason_text_len = strlen(reason_text);
 
     len = sizeof(uint16_t) + reason_text_len;
-    p = (char *) malloc(len);
+    p = (char *) calloc(len + 1, sizeof(*p));
     memcpy(p, &r, sizeof(uint16_t));
     _cws_hton(p, sizeof(uint16_t));
     if (reason_text_len)
@@ -446,12 +446,13 @@ static size_t _cws_receive_header(const char *buffer, size_t count, size_t nitem
         curl_easy_getinfo(priv->easy, CURLINFO_HTTP_CONNECTCODE, &status);
         if (!priv->accepted) {
             if (priv->cbs.on_close) {
+                const char *info = "server didn't accept the websocket upgrade";
                 priv->dispatching++;
                 priv->cbs.on_close((void *)priv->cbs.data,
                                    priv->easy,
                                    CWS_CLOSE_REASON_SERVER_ERROR,
-                                   "server didn't accept the websocket upgrade",
-                                   strlen("server didn't accept the websocket upgrade"));
+                                   info,
+                                   strlen(info));
                 priv->dispatching--;
                 _cws_cleanup(priv);
             }
@@ -577,7 +578,7 @@ static void _cws_dispatch(struct cws_data *priv) {
         break;
 
     case CWS_OPCODE_CLOSE: {
-        enum cws_close_reason reason = CWS_CLOSE_REASON_NO_REASON;
+        cws_close_reason reason = CWS_CLOSE_REASON_NO_REASON;
         const char *str = "";
         size_t len = (size_t)priv->recv.current.used;
 
@@ -585,23 +586,25 @@ static void _cws_dispatch(struct cws_data *priv) {
             uint16_t r;
             memcpy(&r, priv->recv.current.payload, sizeof(uint16_t));
             _cws_ntoh(&r, sizeof(r));
-            if (!cws_close_reason_is_valid((enum cws_close_reason) r)) {
+            if (!cws_close_reason_is_valid((cws_close_reason) r)) {
                 cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, "invalid close reason", SIZE_MAX);
                 r = CWS_CLOSE_REASON_PROTOCOL_ERROR;
             }
-            reason = (enum cws_close_reason) r;
+            reason = (cws_close_reason) r;
             str = (const char *)priv->recv.current.payload + sizeof(uint16_t);
             len = (size_t)priv->recv.current.used - 2;
         } else if (priv->recv.current.used > 0 && priv->recv.current.used < sizeof(uint16_t)) {
             cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, "invalid close payload length", SIZE_MAX);
         }
 
-        if (priv->cbs.on_close)
+        if (priv->cbs.on_close) {
             priv->cbs.on_close((void *)priv->cbs.data, priv->easy, reason, str, len);
+        }
 
         if (!priv->closed) {
-            if (reason == CWS_CLOSE_REASON_NO_REASON)
+            if (reason == CWS_CLOSE_REASON_NO_REASON) {
                 reason = CWS_CLOSE_REASON_UNKNOWN;
+            }
             cws_close(priv->easy, reason, str, len);
         }
         break;
@@ -859,20 +862,25 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
     priv->recv.needed = sizeof(struct cws_frame_header);
     priv->recv.done = 0;
 
+#define WS_HDR      "ws://"
+#define HTTP_HDR    "http://"
+#define WSS_HDR     "wss://"
+#define HTTPS_HDR   "https://"
+
     /* curl doesn't support ws:// or wss:// scheme, rewrite to http/https */
-    if (strncmp(url, "ws://", strlen("ws://")) == 0) {
-        tmp = (char *) malloc(strlen(url) - strlen("ws://") + strlen("http://") + 1);
-        memcpy(tmp, "http://", strlen("http://"));
-        memcpy(tmp + strlen("http://"),
-               url + strlen("ws://"),
-               strlen(url) - strlen("ws://") + 1);
+    if (strncmp(url, WS_HDR, strlen(WS_HDR)) == 0) {
+        tmp = (char *) malloc(strlen(url) - strlen(WS_HDR) + strlen(HTTP_HDR) + 1);
+        memcpy(tmp, HTTP_HDR, strlen(HTTP_HDR));
+        memcpy(tmp + strlen(HTTP_HDR),
+               url + strlen(WS_HDR),
+               strlen(url) - strlen(WS_HDR) + 1);
         url = tmp;
-    } else if (strncmp(url, "wss://", strlen("wss://")) == 0) {
-        tmp = (char *) malloc(strlen(url) - strlen("wss://") + strlen("https://") + 1);
-        memcpy(tmp, "https://", strlen("https://"));
-        memcpy(tmp + strlen("https://"),
-               url + strlen("wss://"),
-               strlen(url) - strlen("wss://") + 1);
+    } else if (strncmp(url, WSS_HDR, strlen(WSS_HDR)) == 0) {
+        tmp = (char *) malloc(strlen(url) - strlen(WSS_HDR) + strlen(HTTPS_HDR) + 1);
+        memcpy(tmp, HTTPS_HDR, strlen(HTTPS_HDR));
+        memcpy(tmp + strlen(HTTPS_HDR),
+               url + strlen(WSS_HDR),
+               strlen(url) - strlen(WSS_HDR) + 1);
         url = tmp;
     }
     curl_easy_setopt(easy, CURLOPT_URL, url);
