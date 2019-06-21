@@ -16,7 +16,7 @@ cmake . && make
 For `CentOS` 7, using following commands instead.
 ```
 yum update -y
-yum -y install cmake git make zlib zlib-devel gcc-c++ libtool  openssl openssl-devel
+yum -y install cmake git make zlib zlib-devel gcc-c++ libtool openssl openssl-devel -y
 
 ```
 
