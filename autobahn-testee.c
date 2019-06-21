@@ -241,7 +241,7 @@ static void on_text(void *data, CURL *easy, const char *text, size_t len) {
 }
 
 static void on_binary(void *data, CURL *easy, const void *mem, size_t len) {
-    const uint8_t *bytes = mem;
+    const uint8_t *bytes = (const uint8_t *) mem;
     size_t i;
 
     if (verbose) {
@@ -273,7 +273,7 @@ static void on_pong(void *data, CURL *easy, const char *reason, size_t len) {
 }
 
 static void on_close(void *data, CURL *easy, enum cws_close_reason reason, const char *reason_text, size_t reason_text_len) {
-    struct myapp_ctx *ctx = data;
+    struct myapp_ctx *ctx = (struct myapp_ctx *) data;
 
     INF("CLOSE=%4d %zd bytes '%s'", reason, reason_text_len, reason_text);
     ctx->exit_started = time(NULL);

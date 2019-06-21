@@ -196,7 +196,7 @@ bool cws_pong(CURL *easy, const char *reason, size_t len);
  *        #NULL.
  * @return #true if sent, #false on errors.
  */
-bool cws_close(CURL *easy, cws_close_reason reason, const char *reason_text, size_t reason_text_len);
+bool cws_close(CURL *easy, cws_close_reason reason, const char *info, size_t info_len);
 
 #ifdef __cplusplus
 }

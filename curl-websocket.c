@@ -176,7 +176,7 @@ struct cws_data {
     bool deleted;
 };
 
-static bool _cws_growth_send_buffer(struct cws_data *priv, const void *buffer, size_t len) {
+static bool _cws_append_send_buffer(struct cws_data *priv, const void *buffer, size_t len) {
     /* optimization note: we could grow by some rounded amount (ie:
      * next power-of-2, 4096/pagesize...) and if using
      * priv->send.position, do the memmove() here to free up some
@@ -217,8 +217,9 @@ static bool _cws_growth_send_buffer_masked(struct cws_data *priv, const uint8_t 
         for (; o < o_end && itr < itr_end; o++, itr++) {
             *o = *itr ^ mask[(itr - itr_begin) & 0x3];
         }
-        if (!_cws_growth_send_buffer(priv, tmpbuf, o - tmpbuf))
+        if (!_cws_append_send_buffer(priv, tmpbuf, o - tmpbuf)) {
             return false;
+        }
     }
 
     return true;
@@ -242,22 +243,22 @@ static bool _cws_build_send_buffer(struct cws_data *priv, cws_opcode opcode, con
 
     _cws_get_random(mask, sizeof(mask));
 
-    if (!_cws_growth_send_buffer(priv, &fh, sizeof(fh)))
+    if (!_cws_append_send_buffer(priv, &fh, sizeof(fh)))
         return false;
 
     if (fh.payload_len == 127) {
         uint64_t payload_len = msglen;
         _cws_hton(&payload_len, sizeof(payload_len));
-        if (!_cws_growth_send_buffer(priv, &payload_len, sizeof(payload_len)))
+        if (!_cws_append_send_buffer(priv, &payload_len, sizeof(payload_len)))
             return false;
     } else if (fh.payload_len == 126) {
         uint16_t payload_len = msglen;
         _cws_hton(&payload_len, sizeof(payload_len));
-        if (!_cws_growth_send_buffer(priv, &payload_len, sizeof(payload_len)))
+        if (!_cws_append_send_buffer(priv, &payload_len, sizeof(payload_len)))
             return false;
     }
 
-    if (!_cws_growth_send_buffer(priv, mask, sizeof(mask))) {
+    if (!_cws_append_send_buffer(priv, mask, sizeof(mask))) {
         return false;
     }
 
@@ -337,43 +338,48 @@ static void _cws_cleanup(struct cws_data *priv) {
     curl_easy_cleanup(easy);
 }
 
-bool cws_close(CURL *easy, cws_close_reason reason, const char *reason_text, size_t reason_text_len) {
+bool cws_close(CURL *easy, cws_close_reason reason, const char *info, size_t info_len) {
     struct cws_data *priv = NULL;
     size_t len;
     uint16_t r;
-    bool ret;
+    bool ret = false;
     char *p = NULL;
 
-    curl_easy_getinfo(easy, CURLINFO_PRIVATE, (char *)&priv); /* checks for char* */
-    if (!priv) {
-        ERR("not CWS (no CURLINFO_PRIVATE): %p", easy);
-        return false;
-    }
-    curl_easy_setopt(easy, CURLOPT_TIMEOUT, 2);
+    do {
+        curl_easy_getinfo(easy, CURLINFO_PRIVATE, (void *)&priv);
+        if (!priv) {
+            ERR("not CWS (no CURLINFO_PRIVATE): %p", easy);
+            break;
+        }
+        curl_easy_setopt(easy, CURLOPT_TIMEOUT, 2);
 
-    if (reason == 0) {
-        ret = _cws_build_send_buffer(priv, CWS_OPCODE_CLOSE, NULL, 0);
-        priv->closed = true;
-        return ret;
-    }
+        if (reason == CWS_CLOSE_REASON_UNKNOWN) {
+            ret = _cws_build_send_buffer(priv, CWS_OPCODE_CLOSE, NULL, 0);
+            break;
+        }
 
-    r = reason;
-    if (!reason_text)
-        reason_text = "";
+        r = reason;
+        if (!info) {
+            info = "";
+        }
 
-    if (reason_text_len == SIZE_MAX)
-        reason_text_len = strlen(reason_text);
+        if (info_len == SIZE_MAX) {
+            info_len = strlen(info);
+        }
 
-    len = sizeof(uint16_t) + reason_text_len;
-    p = (char *) calloc(len + 1, sizeof(*p));
-    memcpy(p, &r, sizeof(uint16_t));
-    _cws_hton(p, sizeof(uint16_t));
-    if (reason_text_len)
-        memcpy(p + sizeof(uint16_t), reason_text, reason_text_len);
+        len = sizeof(uint16_t) + info_len;
+        p = (char *) calloc(len + 1, sizeof(*p));
+        memcpy(p, &r, sizeof(uint16_t));
+        _cws_hton(p, sizeof(uint16_t));
+        if (info_len) {
+            memcpy(p + sizeof(uint16_t), info, info_len);
+        }
 
-    ret = _cws_build_send_buffer(priv, CWS_OPCODE_CLOSE, p, len);
-    free(p);
-    priv->closed = true;
+        ret = _cws_build_send_buffer(priv, CWS_OPCODE_CLOSE, p, len);
+    } while (0);
+
+    if (p) { free(p); }
+    if (priv) { priv->closed = true; }
     return ret;
 }
 
@@ -798,7 +804,7 @@ static size_t _cws_send_data(char *buffer, size_t count, size_t nitems, void *da
         /* optimization note: we could avoid memmove() by keeping a
          * priv->send.position, then we just increment that offset.
          *
-         * on next _cws_growth_send_buffer(), check if priv->send.position > 0 and
+         * on next _cws_append_send_buffer(), check if priv->send.position > 0 and
          * memmove() to make some space without realloc().
          */
         memmove(priv->send.buffer,
