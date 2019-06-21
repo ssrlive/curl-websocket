@@ -13,3 +13,16 @@ git submodule update --init
 cmake . && make
 
 ```
+For `CentOS` 7, using following commands instead.
+```
+yum update -y
+yum -y install cmake git make zlib zlib-devel gcc-c++ libtool  openssl openssl-devel
+
+```
+
+Test the binary, using
+```
+./curl-websocket wss://echo.websocket.org
+
+```
+
