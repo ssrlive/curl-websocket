@@ -435,6 +435,15 @@ static void _cws_check_connection(struct cws_data *priv, const char *buffer, siz
     priv->upgraded = true;
 }
 
+static void _do_on_close_cb(struct cws_data *priv, cws_close_reason reason, const char *info) {
+    if (priv && priv->cbs.on_close) {
+        priv->dispatching++;
+        priv->cbs.on_close((void *)priv->cbs.data, priv->easy, reason,
+            info, info?strlen(info):0);
+        priv->dispatching--;
+    }
+}
+
 static size_t _cws_receive_header(const char *buffer, size_t count, size_t nitems, void *data) {
     struct cws_data *priv = (struct cws_data *) data;
     size_t len = count * nitems;
@@ -454,17 +463,9 @@ static size_t _cws_receive_header(const char *buffer, size_t count, size_t nitem
 
         curl_easy_getinfo(priv->easy, CURLINFO_HTTP_CONNECTCODE, &status);
         if (!priv->accepted) {
-            if (priv->cbs.on_close) {
-                const char *info = "server didn't accept the websocket upgrade";
-                priv->dispatching++;
-                priv->cbs.on_close((void *)priv->cbs.data,
-                                   priv->easy,
-                                   CWS_CLOSE_REASON_SERVER_ERROR,
-                                   info,
-                                   strlen(info));
-                priv->dispatching--;
-                _cws_cleanup(priv);
-            }
+            const char *info = "server didn't accept the websocket upgrade";
+            _do_on_close_cb(priv, CWS_CLOSE_REASON_SERVER_ERROR, info);
+            _cws_cleanup(priv);
             return 0;
         } else {
             if (priv->cbs.on_connect) {
@@ -606,9 +607,7 @@ static void _cws_dispatch(struct cws_data *priv) {
             cws_close(priv->easy, CWS_CLOSE_REASON_PROTOCOL_ERROR, "invalid close payload length", SIZE_MAX);
         }
 
-        if (priv->cbs.on_close) {
-            priv->cbs.on_close((void *)priv->cbs.data, priv->easy, reason, str, len);
-        }
+        _do_on_close_cb(priv, reason, str);
 
         if (!priv->closed) {
             if (reason == CWS_CLOSE_REASON_NO_REASON) {
@@ -819,6 +818,12 @@ static size_t _cws_send_data(char *buffer, size_t count, size_t nitems, void *da
     return todo;
 }
 
+int _cws_closesocket_callback(void *clientp, curl_socket_t item) {
+    struct cws_data *priv = (struct cws_data *) clientp;
+    _do_on_close_cb(priv, CWS_CLOSE_REASON_NORMAL, "closesocket");
+    return 0;
+}
+
 static const char *_cws_fill_websocket_key(struct cws_data *priv, char key_header[44]) {
     uint8_t key[16];
     /* 24 bytes of base24 encoded key
@@ -865,9 +870,12 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
     curl_easy_setopt(easy, CURLOPT_WRITEDATA, priv);
     curl_easy_setopt(easy, CURLOPT_READFUNCTION, _cws_send_data);
     curl_easy_setopt(easy, CURLOPT_READDATA, priv);
+    curl_easy_setopt(easy, CURLOPT_CLOSESOCKETFUNCTION, _cws_closesocket_callback);
+    curl_easy_setopt(easy, CURLOPT_CLOSESOCKETDATA, priv);
 
-    if (callbacks)
+    if (callbacks) {
         priv->cbs = *callbacks;
+    }
 
     priv->recv.needed = CWS_HDR_SIZE;
     priv->recv.done = 0;
@@ -894,7 +902,9 @@ CURL *cws_new(const char *url, const char *websocket_protocols, const struct cws
         url = tmp;
     }
     curl_easy_setopt(easy, CURLOPT_URL, url);
-    free(tmp);
+    if (tmp) {
+        free(tmp);
+    }
 
     /*
      * BEGIN: work around CURL to get WebSocket:
